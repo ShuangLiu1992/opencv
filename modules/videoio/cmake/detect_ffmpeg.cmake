@@ -1,4 +1,3 @@
-# --- FFMPEG ---
 if(NOT HAVE_FFMPEG AND OPENCV_FFMPEG_USE_FIND_PACKAGE)
   if(OPENCV_FFMPEG_USE_FIND_PACKAGE STREQUAL "1" OR OPENCV_FFMPEG_USE_FIND_PACKAGE STREQUAL "ON")
     set(OPENCV_FFMPEG_USE_FIND_PACKAGE "FFMPEG")
@@ -75,12 +74,11 @@ if(HAVE_FFMPEG AND NOT HAVE_FFMPEG_WRAPPER AND NOT OPENCV_FFMPEG_SKIP_BUILD_CHEC
   try_compile(__VALID_FFMPEG
       "${OpenCV_BINARY_DIR}"
       "${OpenCV_SOURCE_DIR}/cmake/checks/ffmpeg_test.cpp"
-      CMAKE_FLAGS "-DINCLUDE_DIRECTORIES:STRING=${FFMPEG_INCLUDE_DIRS}"
-                  "-DLINK_LIBRARIES:STRING=${FFMPEG_LIBRARIES}"
+      LINK_LIBRARIES CONAN_PKG::FFMPEG
       OUTPUT_VARIABLE TRY_OUT
   )
   if(NOT __VALID_FFMPEG)
-    # message(FATAL_ERROR "FFMPEG: test check build log:\n${TRY_OUT}")
+    message(FATAL_ERROR "FFMPEG: test check build log:\n${TRY_OUT}")
     message(STATUS "WARNING: Can't build ffmpeg test code")
     set(HAVE_FFMPEG FALSE)
   endif()
@@ -89,6 +87,9 @@ endif()
 #==================================
 unset(_required_ffmpeg_libraries)
 unset(_used_ffmpeg_libraries)
+
+set(FFMPEG_INCLUDE_DIRS "")
+set(FFMPEG_LIBRARIES CONAN_PKG::FFMPEG)
 
 if(HAVE_FFMPEG_WRAPPER)
   ocv_add_external_target(ffmpeg "" "" "HAVE_FFMPEG_WRAPPER")
