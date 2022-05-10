@@ -28,14 +28,16 @@ using namespace cv;
 #define MAX_BUF_COUNT 4
 
 #define COLOR_FormatUnknown -1
-#define COLOR_FormatYUV420Planar 19
-#define COLOR_FormatYUV420SemiPlanar 21
+#define COLOR_FormatYUV420YV12 19
+#define COLOR_FormatYUV420IYUV 20
+#define COLOR_FormatYUV420NV21 21
 
 #define FOURCC_BGR CV_FOURCC_MACRO('B','G','R','3')
 #define FOURCC_RGB CV_FOURCC_MACRO('R','G','B','3')
 #define FOURCC_GRAY CV_FOURCC_MACRO('G','R','E','Y')
 #define FOURCC_NV21 CV_FOURCC_MACRO('N','V','2','1')
 #define FOURCC_YV12 CV_FOURCC_MACRO('Y','V','1','2')
+#define FOURCC_IYUV CV_FOURCC_MACRO('I','Y','U','V')
 #define FOURCC_UNKNOWN  0xFFFFFFFF
 
 template <typename T> class RangeValue {
@@ -310,15 +312,29 @@ public:
         AImage_getPlanePixelStride(image.get(), 1, &uvPixelStride);
 
         if ( (uvPixelStride == 2) && (uPixel == vPixel + 1) && (yLen == frameWidth * frameHeight) && (uLen == ((yLen / 2) - 1)) && (vLen == uLen) ) {
-            colorFormat = COLOR_FormatYUV420SemiPlanar;
+            colorFormat = COLOR_FormatYUV420NV21;
             if (fourCC == FOURCC_UNKNOWN) {
                 fourCC = FOURCC_NV21;
             }
+            buffer.clear();
+            buffer.insert(buffer.end(), yPixel, yPixel + yLen);
+            buffer.insert(buffer.end(), vPixel, vPixel + yLen / 2);
         } else if ( (uvPixelStride == 1) && (uPixel == vPixel + vLen) && (yLen == frameWidth * frameHeight) && (uLen == yLen / 4) && (vLen == uLen) ) {
-            colorFormat = COLOR_FormatYUV420Planar;
+            colorFormat = COLOR_FormatYUV420YV12;
             if (fourCC == FOURCC_UNKNOWN) {
                 fourCC = FOURCC_YV12;
             }
+            buffer.clear();
+            buffer.insert(buffer.end(), yPixel, yPixel + yLen);
+            buffer.insert(buffer.end(), vPixel, vPixel + yLen / 2);
+        } else if ( (uvPixelStride == 1) && (vPixel == uPixel + vLen) && (yLen == frameWidth * frameHeight) && (uLen == yLen / 4) && (vLen == uLen) ) {
+            colorFormat = COLOR_FormatYUV420IYUV;
+            if (fourCC == FOURCC_UNKNOWN) {
+                fourCC = FOURCC_IYUV;
+            }
+            buffer.clear();
+            buffer.insert(buffer.end(), yPixel, yPixel + yLen);
+            buffer.insert(buffer.end(), uPixel, uPixel + yLen / 2);
         } else {
             colorFormat = COLOR_FormatUnknown;
             fourCC = FOURCC_UNKNOWN;
@@ -327,9 +343,6 @@ public:
         }
         AImage_getTimestamp(img, &timestampNs);
 
-        buffer.clear();
-        buffer.insert(buffer.end(), yPixel, yPixel + yLen);
-        buffer.insert(buffer.end(), vPixel, vPixel + yLen / 2);
         return true;
     }
 
@@ -339,7 +352,7 @@ public:
             return false;
         }
         Mat yuv(frameHeight + frameHeight/2, frameWidth, CV_8UC1, buffer.data());
-        if (colorFormat == COLOR_FormatYUV420Planar) {
+        if (colorFormat == COLOR_FormatYUV420YV12) {
             switch (fourCC) {
                 case FOURCC_BGR:
                     cv::cvtColor(yuv, out, cv::COLOR_YUV2BGR_YV12);
@@ -357,7 +370,7 @@ public:
                     LOGE("Unexpected FOURCC value: %d", fourCC);
                     break;
             }
-        } else if (colorFormat == COLOR_FormatYUV420SemiPlanar) {
+        } else if (colorFormat == COLOR_FormatYUV420NV21) {
             switch (fourCC) {
                 case FOURCC_BGR:
                     cv::cvtColor(yuv, out, cv::COLOR_YUV2BGR_NV21);
@@ -369,6 +382,24 @@ public:
                     cv::cvtColor(yuv, out, cv::COLOR_YUV2GRAY_NV21);
                     break;
                 case FOURCC_NV21:
+                    yuv.copyTo(out);
+                    break;
+                default:
+                    LOGE("Unexpected FOURCC value: %d", fourCC);
+                    break;
+            }
+        } else if (colorFormat == COLOR_FormatYUV420IYUV) {
+            switch (fourCC) {
+                case FOURCC_BGR:
+                    cv::cvtColor(yuv, out, cv::COLOR_YUV2BGR_IYUV);
+                    break;
+                case FOURCC_RGB:
+                    cv::cvtColor(yuv, out, cv::COLOR_YUV2RGB_IYUV);
+                    break;
+                case FOURCC_GRAY:
+                    cv::cvtColor(yuv, out, cv::COLOR_YUV2GRAY_IYUV);
+                    break;
+                case FOURCC_IYUV:
                     yuv.copyTo(out);
                     break;
                 default:
@@ -440,19 +471,27 @@ public:
                                 fourCC = newFourCC;
                                 return true;
                             case FOURCC_YV12:
-                                if (colorFormat == COLOR_FormatYUV420Planar) {
+                                if (colorFormat == COLOR_FormatYUV420YV12) {
                                     fourCC = newFourCC;
                                     return true;
                                 } else {
-                                    LOGE("Unsupported FOURCC conversion COLOR_FormatYUV420SemiPlanar -> COLOR_FormatYUV420Planar");
+                                    LOGE("Unsupported FOURCC conversion COLOR_FormatYUV420 -> COLOR_FormatYUV420YV12");
                                     return false;
                                 }
                             case FOURCC_NV21:
-                                if (colorFormat == COLOR_FormatYUV420SemiPlanar) {
+                                if (colorFormat == COLOR_FormatYUV420NV21) {
                                     fourCC = newFourCC;
                                     return true;
                                 } else {
-                                    LOGE("Unsupported FOURCC conversion COLOR_FormatYUV420Planar -> COLOR_FormatYUV420SemiPlanar");
+                                    LOGE("Unsupported FOURCC conversion COLOR_FormatYUV420 -> COLOR_FormatYUV420NV21");
+                                    return false;
+                                }
+                            case FOURCC_IYUV:
+                                if (colorFormat == COLOR_FormatYUV420IYUV) {
+                                    fourCC = newFourCC;
+                                    return true;
+                                } else {
+                                    LOGE("Unsupported FOURCC conversion COLOR_FormatYUV420 -> COLOR_FormatYUV420IYUV");
                                     return false;
                                 }
                             default:
