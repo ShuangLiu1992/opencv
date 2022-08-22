@@ -57,6 +57,10 @@
 #include "opencv2/core/cvstd.hpp"
 #include "opencv2/core/matx.hpp"
 
+#if __has_include(<Eigen/Dense>)
+#include <Eigen/Dense>
+#endif
+
 namespace cv
 {
 
@@ -171,6 +175,13 @@ public:
 #endif
     Point_(const Size_<_Tp>& sz);
     Point_(const Vec<_Tp, 2>& v);
+
+#if __has_include(<Eigen/Dense>)
+    template<typename Scalar>
+    Point_(const Eigen::Vector2<Scalar>& v) : Point_(v.x(), v.y()) {}
+    template<typename Scalar>
+    operator Eigen::Vector2<Scalar>() const { return {x, y}; }
+#endif
 
 #if (defined(__GNUC__) && __GNUC__ < 5) && !defined(__clang__)  // GCC 4.x bug. Details: https://github.com/opencv/opencv/pull/20837
     Point_& operator = (const Point_& pt);
