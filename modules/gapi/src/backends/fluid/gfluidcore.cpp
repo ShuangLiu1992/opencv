@@ -23,10 +23,6 @@
 #include <opencv2/gapi/fluid/gfluidkernel.hpp>
 #include <opencv2/gapi/fluid/core.hpp>
 
-#if CV_SSE4_1
-#include "gfluidcore_simd_sse41.hpp"
-#endif
-
 #include "gfluidbuffer_priv.hpp"
 #include "gfluidbackend.hpp"
 #include "gfluidutils.hpp"
@@ -382,271 +378,11 @@ CV_ALWAYS_INLINE int absdiff_simd(const T in1[], const T in2[], T out[], int len
 
     return 0;
 }
-
-template<typename T, typename VT>
-CV_ALWAYS_INLINE int add_simd_sametype(const T in1[], const T in2[], T out[], int length)
-{
-    constexpr int nlanes = static_cast<int>(VT::nlanes);
-
-    if (length < nlanes)
-        return 0;
-
-    int x = 0;
-    for (;;)
-    {
-        for (; x <= length - nlanes; x += nlanes)
-        {
-            VT a = vx_load(&in1[x]);
-            VT b = vx_load(&in2[x]);
-            vx_store(&out[x], a + b);
-        }
-
-        if (x < length && (in1 != out) && (in2 != out))
-        {
-            x = length - nlanes;
-            continue;  // process one more time (unaligned tail)
-        }
-        break;
-    }
-
-    return x;
-}
-
-template<typename SRC, typename DST>
-CV_ALWAYS_INLINE int add_simd(const SRC in1[], const SRC in2[], DST out[], int length)
-{
-    if (std::is_same<DST, float>::value && !std::is_same<SRC, float>::value)
-        return 0;
-
-    if (std::is_same<DST, SRC>::value)
-    {
-        if (std::is_same<DST, uchar>::value)
-        {
-            return add_simd_sametype<uchar, v_uint8>(reinterpret_cast<const uchar*>(in1),
-                                                     reinterpret_cast<const uchar*>(in2),
-                                                     reinterpret_cast<uchar*>(out), length);
-        }
-        else if (std::is_same<DST, short>::value)
-        {
-            return add_simd_sametype<short, v_int16>(reinterpret_cast<const short*>(in1),
-                                                     reinterpret_cast<const short*>(in2),
-                                                     reinterpret_cast<short*>(out), length);
-        }
-        else if (std::is_same<DST, float>::value)
-        {
-            return add_simd_sametype<float, v_float32>(reinterpret_cast<const float*>(in1),
-                                                       reinterpret_cast<const float*>(in2),
-                                                       reinterpret_cast<float*>(out), length);
-        }
-    }
-    else if (std::is_same<SRC, short>::value && std::is_same<DST, uchar>::value)
-    {
-        constexpr int nlanes = static_cast<int>(v_uint8::nlanes);
-
-        if (length < nlanes)
-            return 0;
-
-        int x = 0;
-        for (;;)
-        {
-            for (; x <= length - nlanes; x += nlanes)
-            {
-                v_int16 a1 = vx_load(reinterpret_cast<const short*>(&in1[x]));
-                v_int16 a2 = vx_load(reinterpret_cast<const short*>(&in1[x + nlanes / 2]));
-                v_int16 b1 = vx_load(reinterpret_cast<const short*>(&in2[x]));
-                v_int16 b2 = vx_load(reinterpret_cast<const short*>(&in2[x + nlanes / 2]));
-
-                vx_store(reinterpret_cast<uchar*>(&out[x]), v_pack_u(a1 + b1, a2 + b2));
-            }
-
-            if (x < length)
-            {
-                CV_DbgAssert((reinterpret_cast<const short*>(in1) != reinterpret_cast<const short*>(out)) &&
-                             (reinterpret_cast<const short*>(in2) != reinterpret_cast<const short*>(out)));
-                x = length - nlanes;
-                continue;  // process one more time (unaligned tail)
-            }
-            break;
-        }
-
-        return x;
-    }
-    else if (std::is_same<SRC, float>::value && std::is_same<DST, uchar>::value)
-    {
-        constexpr int nlanes = static_cast<int>(v_uint8::nlanes);
-
-        if (length < nlanes)
-            return 0;
-
-        int x = 0;
-        for (;;)
-        {
-            for (; x <= length - nlanes; x += nlanes)
-            {
-                v_float32 a1 = vx_load(reinterpret_cast<const float*>(&in1[x]));
-                v_float32 a2 = vx_load(reinterpret_cast<const float*>(&in1[x + nlanes / 4]));
-                v_float32 a3 = vx_load(reinterpret_cast<const float*>(&in1[x + 2 * nlanes / 4]));
-                v_float32 a4 = vx_load(reinterpret_cast<const float*>(&in1[x + 3 * nlanes / 4]));
-
-                v_float32 b1 = vx_load(reinterpret_cast<const float*>(&in2[x]));
-                v_float32 b2 = vx_load(reinterpret_cast<const float*>(&in2[x + nlanes / 4]));
-                v_float32 b3 = vx_load(reinterpret_cast<const float*>(&in2[x + 2 * nlanes / 4]));
-                v_float32 b4 = vx_load(reinterpret_cast<const float*>(&in2[x + 3 * nlanes / 4]));
-
-                vx_store(reinterpret_cast<uchar*>(&out[x]), v_pack_u(v_pack(v_round(a1 + b1), v_round(a2 + b2)),
-                                                                     v_pack(v_round(a3 + b3), v_round(a4 + b4))));
-            }
-
-            if (x < length)
-            {
-                CV_DbgAssert((reinterpret_cast<const float*>(in1) != reinterpret_cast<const float*>(out)) &&
-                             (reinterpret_cast<const float*>(in2) != reinterpret_cast<const float*>(out)));
-                x = length - nlanes;
-                continue;  // process one more time (unaligned tail)
-            }
-            break;
-        }
-
-        return x;
-    }
-
-    return 0;
-}
-
-template<typename T, typename VT>
-CV_ALWAYS_INLINE int sub_simd_sametype(const T in1[], const T in2[], T out[], int length)
-{
-    constexpr int nlanes = static_cast<int>(VT::nlanes);
-
-    if (length < nlanes)
-        return 0;
-
-    int x = 0;
-    for (;;)
-    {
-        for (; x <= length - nlanes; x += nlanes)
-        {
-            VT a = vx_load(&in1[x]);
-            VT b = vx_load(&in2[x]);
-            vx_store(&out[x], a - b);
-        }
-
-        if (x < length && (in1 != out) && (in2 != out))
-        {
-            x = length - nlanes;
-            continue;  // process one more time (unaligned tail)
-        }
-        break;
-    }
-
-    return x;
-}
-
-template<typename SRC, typename DST>
-CV_ALWAYS_INLINE int sub_simd(const SRC in1[], const SRC in2[], DST out[], int length)
-{
-    if (std::is_same<DST, float>::value && !std::is_same<SRC, float>::value)
-        return 0;
-
-    if (std::is_same<DST, SRC>::value)
-    {
-        if (std::is_same<DST, uchar>::value)
-        {
-            return sub_simd_sametype<uchar, v_uint8>(reinterpret_cast<const uchar*>(in1),
-                                                     reinterpret_cast<const uchar*>(in2),
-                                                     reinterpret_cast<uchar*>(out), length);
-        }
-        else if (std::is_same<DST, short>::value)
-        {
-            return sub_simd_sametype<short, v_int16>(reinterpret_cast<const short*>(in1),
-                                                     reinterpret_cast<const short*>(in2),
-                                                     reinterpret_cast<short*>(out), length);
-        }
-        else if (std::is_same<DST, float>::value)
-        {
-            return sub_simd_sametype<float, v_float32>(reinterpret_cast<const float*>(in1),
-                                                       reinterpret_cast<const float*>(in2),
-                                                       reinterpret_cast<float*>(out), length);
-        }
-    }
-    else if (std::is_same<SRC, short>::value && std::is_same<DST, uchar>::value)
-    {
-        constexpr int nlanes = static_cast<int>(v_uint8::nlanes);
-
-        if (length < nlanes)
-            return 0;
-
-        int x = 0;
-        for (;;)
-        {
-            for (; x <= length - nlanes; x += nlanes)
-            {
-                v_int16 a1 = vx_load(reinterpret_cast<const short*>(&in1[x]));
-                v_int16 a2 = vx_load(reinterpret_cast<const short*>(&in1[x + nlanes / 2]));
-                v_int16 b1 = vx_load(reinterpret_cast<const short*>(&in2[x]));
-                v_int16 b2 = vx_load(reinterpret_cast<const short*>(&in2[x + nlanes / 2]));
-
-                vx_store(reinterpret_cast<uchar*>(&out[x]), v_pack_u(a1 - b1, a2 - b2));
-            }
-
-            if (x < length)
-            {
-                CV_DbgAssert((reinterpret_cast<const short*>(in1) != reinterpret_cast<const short*>(out)) &&
-                             (reinterpret_cast<const short*>(in2) != reinterpret_cast<const short*>(out)));
-                x = length - nlanes;
-                continue;  // process one more time (unaligned tail)
-            }
-            break;
-        }
-
-        return x;
-    }
-    else if (std::is_same<SRC, float>::value && std::is_same<DST, uchar>::value)
-    {
-        constexpr int nlanes = static_cast<int>(v_uint8::nlanes);
-
-        if (length < nlanes)
-            return 0;
-
-        int x = 0;
-        for (;;)
-        {
-            for (; x <= length - nlanes; x += nlanes)
-            {
-                v_float32 a1 = vx_load(reinterpret_cast<const float*>(&in1[x]));
-                v_float32 a2 = vx_load(reinterpret_cast<const float*>(&in1[x + nlanes / 4]));
-                v_float32 a3 = vx_load(reinterpret_cast<const float*>(&in1[x + 2 * nlanes / 4]));
-                v_float32 a4 = vx_load(reinterpret_cast<const float*>(&in1[x + 3 * nlanes / 4]));
-
-                v_float32 b1 = vx_load(reinterpret_cast<const float*>(&in2[x]));
-                v_float32 b2 = vx_load(reinterpret_cast<const float*>(&in2[x + nlanes / 4]));
-                v_float32 b3 = vx_load(reinterpret_cast<const float*>(&in2[x + 2 * nlanes / 4]));
-                v_float32 b4 = vx_load(reinterpret_cast<const float*>(&in2[x + 3 * nlanes / 4]));
-
-                vx_store(reinterpret_cast<uchar*>(&out[x]), v_pack_u(v_pack(v_round(a1 - b1), v_round(a2 - b2)),
-                                                                     v_pack(v_round(a3 - b3), v_round(a4 - b4))));
-            }
-
-            if (x < length)
-            {
-                CV_DbgAssert((reinterpret_cast<const float*>(in1) != reinterpret_cast<const float*>(out)) &&
-                             (reinterpret_cast<const float*>(in2) != reinterpret_cast<const float*>(out)));
-                x = length - nlanes;
-                continue;  // process one more time (unaligned tail)
-            }
-            break;
-        }
-
-        return x;
-    }
-
-    return 0;
-}
 #endif // CV_SIMD
 
 template<typename DST, typename SRC1, typename SRC2>
-static CV_ALWAYS_INLINE void run_arithm(Buffer &dst, const View &src1, const View &src2,
-                                        Arithm arithm, double scale=1)
+CV_ALWAYS_INLINE void run_arithm(Buffer &dst, const View &src1, const View &src2,
+                                 Arithm arithm, double scale=1)
 {
     static_assert(std::is_same<SRC1, SRC2>::value, "wrong types");
 
@@ -656,7 +392,7 @@ static CV_ALWAYS_INLINE void run_arithm(Buffer &dst, const View &src1, const Vie
 
     int width  = dst.length();
     int chan   = dst.meta().chan;
-    int length = width * chan;
+    const int length = width * chan;
 
     // NB: assume in/out types are not 64-bits
     float _scale = static_cast<float>( scale );
@@ -712,13 +448,22 @@ GAPI_FLUID_KERNEL(GFluidAdd, cv::gapi::core::GAdd, false)
     static void run(const View &src1, const View &src2, int /*dtype*/, Buffer &dst)
     {
         //      DST     SRC1    SRC2    OP          __VA_ARGS__
-        BINARY_(uchar , uchar , uchar , run_arithm, dst, src1, src2, ARITHM_ADD);
-        BINARY_(uchar ,  short,  short, run_arithm, dst, src1, src2, ARITHM_ADD);
-        BINARY_(uchar ,  float,  float, run_arithm, dst, src1, src2, ARITHM_ADD);
-        BINARY_( short,  short,  short, run_arithm, dst, src1, src2, ARITHM_ADD);
-        BINARY_( float, uchar , uchar , run_arithm, dst, src1, src2, ARITHM_ADD);
-        BINARY_( float,  short,  short, run_arithm, dst, src1, src2, ARITHM_ADD);
-        BINARY_( float,  float,  float, run_arithm, dst, src1, src2, ARITHM_ADD);
+        BINARY_(uchar,  uchar,  uchar,  run_arithm, dst, src1, src2, ARITHM_ADD);
+        BINARY_(uchar,  ushort, ushort, run_arithm, dst, src1, src2, ARITHM_ADD);
+        BINARY_(uchar,  short,  short,  run_arithm, dst, src1, src2, ARITHM_ADD);
+        BINARY_(uchar,  float,  float,  run_arithm, dst, src1, src2, ARITHM_ADD);
+        BINARY_(short,  short,  short,  run_arithm, dst, src1, src2, ARITHM_ADD);
+        BINARY_(short,  uchar,  uchar,  run_arithm, dst, src1, src2, ARITHM_ADD);
+        BINARY_(short,  ushort, ushort, run_arithm, dst, src1, src2, ARITHM_ADD);
+        BINARY_(short,  float,  float,  run_arithm, dst, src1, src2, ARITHM_ADD);
+        BINARY_(ushort, ushort, ushort, run_arithm, dst, src1, src2, ARITHM_ADD);
+        BINARY_(ushort, uchar,  uchar,  run_arithm, dst, src1, src2, ARITHM_ADD);
+        BINARY_(ushort, short,  short,  run_arithm, dst, src1, src2, ARITHM_ADD);
+        BINARY_(ushort, float,  float,  run_arithm, dst, src1, src2, ARITHM_ADD);
+        BINARY_(float,  uchar,  uchar,  run_arithm, dst, src1, src2, ARITHM_ADD);
+        BINARY_(float,  ushort, ushort, run_arithm, dst, src1, src2, ARITHM_ADD);
+        BINARY_(float,  short,  short,  run_arithm, dst, src1, src2, ARITHM_ADD);
+        BINARY_(float,  float,  float,  run_arithm, dst, src1, src2, ARITHM_ADD);
 
         CV_Error(cv::Error::StsBadArg, "unsupported combination of types");
     }
@@ -732,10 +477,19 @@ GAPI_FLUID_KERNEL(GFluidSub, cv::gapi::core::GSub, false)
     {
         //      DST     SRC1    SRC2    OP          __VA_ARGS__
         BINARY_(uchar , uchar , uchar , run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
-        BINARY_(uchar ,  short,  short, run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
-        BINARY_(uchar ,  float,  float, run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
-        BINARY_( short,  short,  short, run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
-        BINARY_( float, uchar , uchar , run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
+        BINARY_(uchar,  ushort, ushort, run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
+        BINARY_(uchar,  short,  short,  run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
+        BINARY_(uchar,  float,  float,  run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
+        BINARY_(short,  short,  short,  run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
+        BINARY_(short,  uchar,  uchar,  run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
+        BINARY_(short,  ushort, ushort, run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
+        BINARY_(short,  float,  float,  run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
+        BINARY_(ushort, ushort, ushort, run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
+        BINARY_(ushort, uchar,  uchar,  run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
+        BINARY_(ushort, short,  short,  run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
+        BINARY_(ushort, float,  float,  run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
+        BINARY_(float,  uchar,  uchar,  run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
+        BINARY_(float,  ushort, ushort, run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
         BINARY_( float,  short,  short, run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
         BINARY_( float,  float,  float, run_arithm, dst, src1, src2, ARITHM_SUBTRACT);
 
@@ -891,25 +645,6 @@ static void run_arithm_s(DST out[], const SRC in[], int width, int chan,
 }
 
 template<typename DST, typename SRC>
-static void run_absdiffc(Buffer &dst, const View &src, const float scalar[])
-{
-    const auto *in = src.InLine<SRC>(0);
-    auto *out = dst.OutLine<DST>();
-
-    int width = dst.length();
-    int chan = dst.meta().chan;
-    const int length = width * chan;
-
-    int w = 0;
-#if CV_SIMD
-    w = absdiffc_simd(in, scalar, out, length, chan);
-#endif
-
-    for (; w < length; ++w)
-        out[w] = absdiff<DST>(in[w], scalar[w%chan]);
-}
-
-template<typename DST, typename SRC>
 CV_ALWAYS_INLINE void run_arithm_s(Buffer &dst, const View &src, const float scalar[],
                                    Arithm arithm, float scale=1)
 {
@@ -954,18 +689,13 @@ CV_ALWAYS_INLINE void run_arithm_s(Buffer &dst, const View &src, const float sca
                 out[chan * w + c] = mul<DST>(in[chan * w + c], scalar[c], scale);
         break;
     }
-    case ARITHM_DIVIDE:
-        for (int w=0; w < width; w++)
-            for (int c=0; c < chan; c++)
-                out[chan*w + c] = div<DST>(in[chan*w + c], scalar[c], scale);
-        break;
     default: CV_Error(cv::Error::StsBadArg, "unsupported arithmetic operation");
     }
 }
 
 template<typename DST, typename SRC>
-static void run_arithm_rs(Buffer &dst, const View &src, const float scalar[4], Arithm arithm,
-                          float scale=1)
+CV_ALWAYS_INLINE void run_arithm_rs(Buffer &dst, const View &src, const float scalar[],
+                                    Arithm arithm, float scale=1)
 {
     const auto *in  = src.InLine<SRC>(0);
           auto *out = dst.OutLine<DST>();
@@ -983,17 +713,33 @@ static void run_arithm_rs(Buffer &dst, const View &src, const float scalar[4], A
         w = subrc_simd(scalar, in, out, length, chan);
 #endif
         for (; w < length; ++w)
+        {
             out[w] = subr<DST>(in[w], scalar[w % chan]);
+        }
         break;
     }
-    // TODO: optimize division
     case ARITHM_DIVIDE:
-        for (int w=0; w < width; w++)
-            for (int c=0; c < chan; c++)
-                out[chan*w + c] = div<DST>(scalar[c], in[chan*w + c], scale);
+    {
+        int w = 0;
+#if CV_SIMD
+        w = divrc_simd(scalar, in, out, length, chan, scale);
+#endif
+        for (; w < length; ++w)
+        {
+            out[w] = div<DST>(scalar[w % chan], in[w], scale);
+        }
         break;
+    }
     default: CV_Error(cv::Error::StsBadArg, "unsupported arithmetic operation");
     }
+}
+
+CV_ALWAYS_INLINE void setScratchSize(Buffer& scratch, const int buflen)
+{
+    cv::Size bufsize(buflen, 1);
+    GMatDesc bufdesc = { CV_32F, 1, bufsize };
+    Buffer buffer(bufdesc);
+    scratch = std::move(buffer);
 }
 
 CV_ALWAYS_INLINE void initScratchBuffer(Buffer& scratch)
@@ -1016,25 +762,47 @@ CV_ALWAYS_INLINE void initScratchBuffer(Buffer& scratch)
 #else
     constexpr int buflen = 4;
 #endif
-    cv::Size bufsize(buflen, 1);
-    GMatDesc bufdesc = { CV_32F, 1, bufsize };
-    Buffer buffer(bufdesc);
-    scratch = std::move(buffer);
+    setScratchSize(scratch, buflen);
+}
+
+CV_ALWAYS_INLINE void scalar_to_scratch(const cv::Scalar& scalar,
+                                        float scratch[], const int length, const int chan)
+{
+    for (int i = 0; i < length; ++i)
+        scratch[i] = static_cast<float>(scalar[i % chan]);
+}
+
+template<typename DST, typename SRC>
+CV_ALWAYS_INLINE void run_absdiffc(Buffer& dst, const View& src, const float scalar[])
+{
+    const auto* in = src.InLine<SRC>(0);
+    auto* out = dst.OutLine<DST>();
+
+    int width = dst.length();
+    int chan = dst.meta().chan;
+    const int length = width * chan;
+
+    int w = 0;
+#if CV_SIMD
+    w = absdiffc_simd(in, scalar, out, length, chan);
+#endif
+
+    for (; w < length; ++w)
+        out[w] = absdiff<DST>(in[w], scalar[w % chan]);
 }
 
 GAPI_FLUID_KERNEL(GFluidAbsDiffC, cv::gapi::core::GAbsDiffC, true)
 {
     static const int Window = 1;
 
-    static void run(const View &src, const cv::Scalar& _scalar, Buffer &dst, Buffer& scratch)
+    static void run(const View& src, const cv::Scalar& _scalar, Buffer& dst, Buffer& scratch)
     {
         if (dst.y() == 0)
         {
             const int chan = src.meta().chan;
-            float* sc = scratch.OutLine<float>();
+            float* _scratch = scratch.OutLine<float>();
 
-            for (int i = 0; i < scratch.length(); ++i)
-                sc[i] = static_cast<float>(_scalar[i % chan]);
+            scalar_to_scratch(_scalar, _scratch, scratch.length(), chan);
         }
 
         const float* scalar = scratch.OutLine<float>();
@@ -1062,17 +830,16 @@ GAPI_FLUID_KERNEL(GFluidAddC, cv::gapi::core::GAddC, true)
 {
     static const int Window = 1;
 
-    static void run(const View &src, const cv::Scalar &_scalar, int /*dtype*/, Buffer &dst, Buffer &scratch)
+    static void run(const View& src, const cv::Scalar& _scalar, int /*dtype*/, Buffer& dst, Buffer& scratch)
     {
         GAPI_Assert(src.meta().chan <= 4);
 
         if (dst.y() == 0)
         {
             const int chan = src.meta().chan;
-            float* sc = scratch.OutLine<float>();
+            float* _scratch = scratch.OutLine<float>();
 
-            for (int i = 0; i < scratch.length(); ++i)
-                sc[i] = static_cast<float>(_scalar[i % chan]);
+            scalar_to_scratch(_scalar, _scratch, scratch.length(), chan);
         }
 
         const float* scalar = scratch.OutLine<float>();
@@ -1119,10 +886,9 @@ GAPI_FLUID_KERNEL(GFluidSubC, cv::gapi::core::GSubC, true)
         if (dst.y() == 0)
         {
             const int chan = src.meta().chan;
-            float* sc = scratch.OutLine<float>();
+            float* _scratch = scratch.OutLine<float>();
 
-            for (int i = 0; i < scratch.length(); ++i)
-                sc[i] = static_cast<float>(_scalar[i % chan]);
+            scalar_to_scratch(_scalar, _scratch, scratch.length(), chan);
         }
 
         const float* scalar = scratch.OutLine<float>();
@@ -1169,10 +935,9 @@ GAPI_FLUID_KERNEL(GFluidSubRC, cv::gapi::core::GSubRC, true)
         if (dst.y() == 0)
         {
             const int chan = src.meta().chan;
-            float* sc = scratch.OutLine<float>();
+            float* _scratch = scratch.OutLine<float>();
 
-            for (int i = 0; i < scratch.length(); ++i)
-                sc[i] = static_cast<float>(_scalar[i % chan]);
+            scalar_to_scratch(_scalar, _scratch, scratch.length(), chan);
         }
 
         const float* scalar = scratch.OutLine<float>();
@@ -1220,10 +985,9 @@ GAPI_FLUID_KERNEL(GFluidMulC, cv::gapi::core::GMulC, true)
         if (dst.y() == 0)
         {
             const int chan = src.meta().chan;
-            float* sc = scratch.OutLine<float>();
+            float* _scratch = scratch.OutLine<float>();
 
-            for (int i = 0; i < scratch.length(); ++i)
-                sc[i] = static_cast<float>(_scalar[i % chan]);
+            scalar_to_scratch(_scalar, _scratch, scratch.length(), chan);
         }
         const float* scalar = scratch.OutLine<float>();
         const float scale = 1.0;
@@ -1263,7 +1027,7 @@ GAPI_FLUID_KERNEL(GFluidMulCOld, cv::gapi::core::GMulCOld, true)
 {
     static const int Window = 1;
 
-    static void run(const View &src, double _scalar, int /*dtype*/, Buffer &dst, Buffer& scratch)
+    static void run(const View& src, double _scalar, int /*dtype*/, Buffer& dst, Buffer& scratch)
     {
         GAPI_Assert(src.meta().chan <= 4);
 
@@ -1299,59 +1063,161 @@ GAPI_FLUID_KERNEL(GFluidMulCOld, cv::gapi::core::GMulCOld, true)
     }
 };
 
-GAPI_FLUID_KERNEL(GFluidDivC, cv::gapi::core::GDivC, false)
+template<typename DST, typename SRC>
+CV_ALWAYS_INLINE void run_divc(Buffer& dst, const View& src, Buffer& scratch,
+                               float scale)
+{
+    const auto* in = src.InLine<SRC>(0);
+    auto* out = dst.OutLine<DST>();
+    const float* scalar = scratch.OutLine<float>();
+
+    int width = dst.length();
+    int chan = dst.meta().chan;
+    const int length = width * chan;
+
+    int w = 0;
+#if CV_SIMD
+    int scratch_length = scratch.length();
+    int indicator_offset = scratch_length - 1;
+    const int set_mask_indicator = static_cast<int>(*(scratch.OutLine<float>() + (indicator_offset)));
+
+    w = divc_simd(in, scalar, out, length, chan, scale, set_mask_indicator);
+#endif
+
+    for (; w < length; ++w)
+    {
+        out[w] = div<DST>(in[w], scalar[w % chan], scale);
+    }
+}
+
+GAPI_FLUID_KERNEL(GFluidDivC, cv::gapi::core::GDivC, true)
 {
     static const int Window = 1;
 
-    static void run(const View &src, const cv::Scalar &_scalar, double _scale, int /*dtype*/,
-                    Buffer &dst)
+    static void run(const View& src, const cv::Scalar& _scalar, double _scale, int /*dtype*/,
+                    Buffer& dst, Buffer& scratch)
     {
-        const float scalar[4] = {
-            static_cast<float>(_scalar[0]),
-            static_cast<float>(_scalar[1]),
-            static_cast<float>(_scalar[2]),
-            static_cast<float>(_scalar[3])
-        };
-        const float scale = static_cast<float>(_scale);
+        GAPI_Assert(src.meta().chan <= 4);
+
+        if (dst.y() == 0)
+        {
+            const int chan = src.meta().chan;
+            float* _scratch = scratch.OutLine<float>();
+            int scratch_length = scratch.length();
+
+            scalar_to_scratch(_scalar, _scratch, scratch_length - 1, chan);
+
+            _scratch[scratch_length - 1] = 0.0;
+            for (int j = 0; j < chan; ++j)
+            {
+                if (std::fabs(static_cast<float>(_scalar[j])) <= FLT_EPSILON)
+                {
+                    _scratch[scratch_length - 1] = 1.0;
+                    break;
+                }
+            }
+        }
+
+        float scale = static_cast<float>(_scale);
 
         //     DST     SRC     OP            __VA_ARGS__
-        UNARY_(uchar , uchar , run_arithm_s, dst, src, scalar, ARITHM_DIVIDE, scale);
-        UNARY_(uchar ,  short, run_arithm_s, dst, src, scalar, ARITHM_DIVIDE, scale);
-        UNARY_(uchar ,  float, run_arithm_s, dst, src, scalar, ARITHM_DIVIDE, scale);
-        UNARY_( short,  short, run_arithm_s, dst, src, scalar, ARITHM_DIVIDE, scale);
-        UNARY_( float, uchar , run_arithm_s, dst, src, scalar, ARITHM_DIVIDE, scale);
-        UNARY_( float,  short, run_arithm_s, dst, src, scalar, ARITHM_DIVIDE, scale);
-        UNARY_( float,  float, run_arithm_s, dst, src, scalar, ARITHM_DIVIDE, scale);
+        UNARY_(uchar,  uchar,  run_divc, dst, src, scratch, scale);
+        UNARY_(uchar,  ushort, run_divc, dst, src, scratch, scale);
+        UNARY_(uchar,  short,  run_divc, dst, src, scratch, scale);
+        UNARY_(uchar,  float,  run_divc, dst, src, scratch, scale);
+        UNARY_(ushort, ushort, run_divc, dst, src, scratch, scale);
+        UNARY_(ushort, uchar,  run_divc, dst, src, scratch, scale);
+        UNARY_(ushort, short,  run_divc, dst, src, scratch, scale);
+        UNARY_(ushort, float,  run_divc, dst, src, scratch, scale);
+        UNARY_(short,  short,  run_divc, dst, src, scratch, scale);
+        UNARY_(short,  ushort, run_divc, dst, src, scratch, scale);
+        UNARY_(short,  uchar,  run_divc, dst, src, scratch, scale);
+        UNARY_(short,  float,  run_divc, dst, src, scratch, scale);
+        UNARY_(float,  uchar,  run_divc, dst, src, scratch, scale);
+        UNARY_(float,  short,  run_divc, dst, src, scratch, scale);
+        UNARY_(float,  ushort, run_divc, dst, src, scratch, scale);
+        UNARY_(float,  float,  run_divc, dst, src, scratch, scale);
 
         CV_Error(cv::Error::StsBadArg, "unsupported combination of types");
     }
+
+    static void initScratch(const GMatDesc&, const GScalarDesc&, double, int, Buffer& scratch)
+    {
+#if CV_SIMD
+            // 512 bits / 32 bits = 16 elements of float32 a AVX512 SIMD vector can contain.
+            constexpr int maxNlanes = 16;
+
+            // +2 is offset for 3-channel case.
+            // Offset is need to right load coefficients from scalar array to SIMD vectors for 3-channel case.
+            // Scalar array looks like: scalar[] = {C1, C2, C3, C1, C2, C3, ...}
+            // The first scalar SIMD vector should looks like:
+            // C1 C2 C3 C1
+            // The second:
+            // C2 C3 C1 C2
+            // The third:
+            // C3 C1 C2 C3
+            constexpr int offset = 2;
+            constexpr int zero_scalar_elem_indicator = 1;
+            constexpr int buflen = maxNlanes + offset + zero_scalar_elem_indicator;
+#else
+            constexpr int buflen = 4;
+#endif
+            setScratchSize(scratch, buflen);
+    }
+
+    static void resetScratch(Buffer& /*scratch*/)
+    {
+    }
 };
 
-GAPI_FLUID_KERNEL(GFluidDivRC, cv::gapi::core::GDivRC, false)
+GAPI_FLUID_KERNEL(GFluidDivRC, cv::gapi::core::GDivRC, true)
 {
     static const int Window = 1;
 
-    static void run(const cv::Scalar &_scalar, const View &src, double _scale, int /*dtype*/,
-                    Buffer &dst)
+    static void run(const cv::Scalar& _scalar, const View& src, double _scale, int /*dtype*/,
+                    Buffer& dst, Buffer& scratch)
     {
-        const float scalar[4] = {
-            static_cast<float>(_scalar[0]),
-            static_cast<float>(_scalar[1]),
-            static_cast<float>(_scalar[2]),
-            static_cast<float>(_scalar[3])
-        };
+        GAPI_Assert(src.meta().chan <= 4);
+
+        if (dst.y() == 0)
+        {
+            const int chan = src.meta().chan;
+            float* _scratch = scratch.OutLine<float>();
+
+            scalar_to_scratch(_scalar, _scratch, scratch.length(), chan);
+        }
+
+        const float* scalar = scratch.OutLine<float>();
         const float scale = static_cast<float>(_scale);
 
         //     DST     SRC     OP             __VA_ARGS__
-        UNARY_(uchar , uchar , run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
-        UNARY_(uchar ,  short, run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
-        UNARY_(uchar ,  float, run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
-        UNARY_( short,  short, run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
-        UNARY_( float, uchar , run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
-        UNARY_( float,  short, run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
-        UNARY_( float,  float, run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
+        UNARY_(uchar,  uchar,  run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
+        UNARY_(uchar,  ushort, run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
+        UNARY_(uchar,  short,  run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
+        UNARY_(uchar,  float,  run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
+        UNARY_(ushort, ushort, run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
+        UNARY_(ushort, uchar,  run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
+        UNARY_(ushort, short,  run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
+        UNARY_(ushort, float,  run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
+        UNARY_(short,  short,  run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
+        UNARY_(short,  uchar,  run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
+        UNARY_(short,  ushort, run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
+        UNARY_(short,  float,  run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
+        UNARY_(float,  uchar,  run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
+        UNARY_(float,  ushort, run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
+        UNARY_(float,  short,  run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
+        UNARY_(float,  float,  run_arithm_rs, dst, src, scalar, ARITHM_DIVIDE, scale);
 
         CV_Error(cv::Error::StsBadArg, "unsupported combination of types");
+    }
+
+    static void initScratch(const GScalarDesc&, const GMatDesc&, double, int, Buffer& scratch)
+    {
+        initScratchBuffer(scratch);
+    }
+
+    static void resetScratch(Buffer& /*scratch*/)
+    {
     }
 };
 
@@ -1689,102 +1555,43 @@ GAPI_FLUID_KERNEL(GFluidLUT, cv::gapi::core::GLUT, false)
 //
 //-------------------------
 
-#if CV_SIMD128
-template<typename DST, typename SRC>
-CV_ALWAYS_INLINE int run_convertto_simd(DST*, const SRC*, int)
+template<typename T>
+CV_ALWAYS_INLINE void convertto_impl(const T in[], T out[], const int length)
 {
-    return 0;
+    memcpy(out, in, length * sizeof(T));
 }
-CV_ALWAYS_INLINE int run_convertto_simd(uchar *out, const float *in, const int length)
+
+template<typename SRC, typename DST>
+CV_ALWAYS_INLINE void convertto_impl(const SRC in[], DST out[], const int length)
 {
-    int l = 0;
-    for (; l <= length - 16; l += 16)
-    {
-        v_int32x4 i0, i1, i2, i3;
-        i0 = v_round( v_load( (float*)& in[l     ] ) );
-        i1 = v_round( v_load( (float*)& in[l +  4] ) );
-        i2 = v_round( v_load( (float*)& in[l +  8] ) );
-        i3 = v_round( v_load( (float*)& in[l + 12] ) );
-
-        v_uint16x8 us0, us1;
-        us0 = v_pack_u(i0, i1);
-        us1 = v_pack_u(i2, i3);
-
-        v_uint8x16 uc;
-        uc = v_pack(us0, us1);
-        v_store((uchar*)& out[l], uc);
-    }
-    return l;
-}
-CV_ALWAYS_INLINE int run_convertto_simd(ushort *out, const float *in, const int length)
-{
-    int l = 0;
-    for (; l <= length - 8; l += 8)
-    {
-        v_int32x4 i0, i1;
-        i0 = v_round( v_load( (float*)& in[l     ] ) );
-        i1 = v_round( v_load( (float*)& in[l +  4] ) );
-
-        v_uint16x8 us;
-        us = v_pack_u(i0, i1);
-        v_store((ushort*)& out[l], us);
-    }
-    return l;
-}
-#endif
-
-template<typename DST, typename SRC,
-         cv::util::enable_if_t<std::is_integral<DST>::value &&
-                               std::is_floating_point<SRC>::value, bool> = true >
-CV_ALWAYS_INLINE void run_convertto(DST *out, const SRC *in, const int length)
-{
-    // manual SIMD if need rounding
-    static_assert(std::is_same<SRC,float>::value, "64-bit floating-point source is not supported");
-    int l = 0; // cycle index
-#if CV_SIMD128
-    l = run_convertto_simd(out, in, length);
+    int x = 0;
+#if CV_SIMD
+    x = convertto_simd(in, out, length);
 #endif
     // tail of SIMD cycle
-    for (; l < length; l++)
+    for (; x < length; ++x)
     {
-        out[l] = saturate<DST>(in[l], rintf);
+        out[x] = saturate<DST>(in[x], rintf);
     }
 }
-template<typename DST, typename SRC,
-         cv::util::enable_if_t<std::is_integral<DST>::value &&
-                               std::is_integral<SRC>::value   , bool> = true >
-CV_ALWAYS_INLINE void run_convertto(DST *out, const SRC *in, const int length)
+
+template<typename SRC, typename DST>
+CV_ALWAYS_INLINE void convertto_impl(const SRC *in, DST* out, const float alpha, const float beta,
+                                     const int length)
 {
-    for (int l = 0; l < length; l++)
+    int x = 0;
+#if CV_SIMD
+    x = convertto_scaled_simd(in, out, alpha, beta, length);
+#endif
+
+    for (; x < length; ++x)
     {
-        out[l] = saturate<DST>(in[l]);
-    }
-}
-template<typename DST, typename SRC,
-         cv::util::enable_if_t<std::is_floating_point<DST>::value, bool> = true >
-CV_ALWAYS_INLINE void run_convertto(DST *out, const SRC *in, const int length)
-{
-    static_assert(!std::is_same<SRC,double>::value, "64-bit floating-point source is not supported");
-    for (int l = 0; l < length; l++)
-    {
-        out[l] = static_cast<DST>(in[l]);
+        out[x] = saturate<DST>(in[x] * alpha + beta, rintf);
     }
 }
 
 template<typename DST, typename SRC>
-CV_ALWAYS_INLINE void run_convertto(DST *out, const SRC *in, const float alpha, const float beta,
-                                    const int length)
-{
-    static_assert(!std::is_same<SRC,double>::value, "64-bit floating-point source is not supported");
-    // TODO: optimize if alpha and beta and data are integral
-    for (int l = 0; l < length; l++)
-    {
-        out[l] = saturate<DST>(in[l] * alpha + beta, rintf);
-    }
-}
-
-template<typename DST, typename SRC>
-static void run_convertto(Buffer &dst, const View &src, double _alpha, double _beta)
+CV_ALWAYS_INLINE void run_convertto(Buffer &dst, const View &src, double _alpha, double _beta)
 {
     const auto *in  = src.InLine<SRC>(0);
           auto *out = dst.OutLine<DST>();
@@ -1798,13 +1605,13 @@ static void run_convertto(Buffer &dst, const View &src, double _alpha, double _b
     const auto beta  = static_cast<float>( _beta  );
 
     // compute faster if no alpha no beta
-    if (1.f == alpha && 0.f == beta)
+    if ((std::fabs(alpha - 1.f) < FLT_EPSILON) && (std::fabs(beta) < FLT_EPSILON))
     {
-        run_convertto(out, in, length);
+        convertto_impl(in, out, length);
     }
     else // if alpha or beta is non-trivial
     {
-        run_convertto(out, in, alpha, beta, length);
+        convertto_impl(in, out, alpha, beta, length);
     }
 }
 
@@ -1815,22 +1622,22 @@ GAPI_FLUID_KERNEL(GFluidConvertTo, cv::gapi::core::GConvertTo, false)
     static void run(const View &src, int /*rtype*/, double alpha, double beta, Buffer &dst)
     {
         //     DST     SRC     OP             __VA_ARGS__
-        UNARY_(uchar , uchar , run_convertto, dst, src, alpha, beta);
-        UNARY_(uchar , ushort, run_convertto, dst, src, alpha, beta);
-        UNARY_(uchar ,  short, run_convertto, dst, src, alpha, beta);
-        UNARY_(uchar ,  float, run_convertto, dst, src, alpha, beta);
+        UNARY_(uchar, uchar , run_convertto, dst, src, alpha, beta);
+        UNARY_(uchar, ushort, run_convertto, dst, src, alpha, beta);
+        UNARY_(uchar,  short, run_convertto, dst, src, alpha, beta);
+        UNARY_(uchar,  float, run_convertto, dst, src, alpha, beta);
         UNARY_(ushort, uchar , run_convertto, dst, src, alpha, beta);
         UNARY_(ushort, ushort, run_convertto, dst, src, alpha, beta);
         UNARY_(ushort,  short, run_convertto, dst, src, alpha, beta);
         UNARY_(ushort,  float, run_convertto, dst, src, alpha, beta);
-        UNARY_( short, uchar , run_convertto, dst, src, alpha, beta);
-        UNARY_( short, ushort, run_convertto, dst, src, alpha, beta);
-        UNARY_( short,  short, run_convertto, dst, src, alpha, beta);
-        UNARY_( short,  float, run_convertto, dst, src, alpha, beta);
-        UNARY_( float, uchar , run_convertto, dst, src, alpha, beta);
-        UNARY_( float, ushort, run_convertto, dst, src, alpha, beta);
-        UNARY_( float,  short, run_convertto, dst, src, alpha, beta);
-        UNARY_( float,  float, run_convertto, dst, src, alpha, beta);
+        UNARY_(short, uchar , run_convertto, dst, src, alpha, beta);
+        UNARY_(short, ushort, run_convertto, dst, src, alpha, beta);
+        UNARY_(short,  short, run_convertto, dst, src, alpha, beta);
+        UNARY_(short,  float, run_convertto, dst, src, alpha, beta);
+        UNARY_(float, uchar , run_convertto, dst, src, alpha, beta);
+        UNARY_(float, ushort, run_convertto, dst, src, alpha, beta);
+        UNARY_(float,  short, run_convertto, dst, src, alpha, beta);
+        UNARY_(float,  float, run_convertto, dst, src, alpha, beta);
 
         CV_Error(cv::Error::StsBadArg, "unsupported combination of types");
     }
@@ -2513,26 +2320,18 @@ GAPI_FLUID_KERNEL(GFluidSplit3, cv::gapi::core::GSplit3, false)
 
     static void run(const View &src, Buffer &dst1, Buffer &dst2, Buffer &dst3)
     {
-        const auto *in   =  src.InLine<uchar>(0);
+        const auto *in   = src.InLine<uchar>(0);
               auto *out1 = dst1.OutLine<uchar>();
               auto *out2 = dst2.OutLine<uchar>();
               auto *out3 = dst3.OutLine<uchar>();
 
         GAPI_Assert(3 == src.meta().chan);
         int width = src.length();
+        int w = 0;
 
-        int w = 0; // cycle counter
-
-    #if CV_SIMD128
-        for (; w <= width-16; w+=16)
-        {
-            v_uint8x16 a, b, c;
-            v_load_deinterleave(&in[3*w], a, b, c);
-            v_store(&out1[w], a);
-            v_store(&out2[w], b);
-            v_store(&out3[w], c);
-        }
-    #endif
+#if CV_SIMD
+        w = split3_simd(in, out1, out2, out3, width);
+#endif
 
         for (; w < width; w++)
         {
@@ -2549,7 +2348,7 @@ GAPI_FLUID_KERNEL(GFluidSplit4, cv::gapi::core::GSplit4, false)
 
     static void run(const View &src, Buffer &dst1, Buffer &dst2, Buffer &dst3, Buffer &dst4)
     {
-        const auto *in   =  src.InLine<uchar>(0);
+        const auto *in   = src.InLine<uchar>(0);
               auto *out1 = dst1.OutLine<uchar>();
               auto *out2 = dst2.OutLine<uchar>();
               auto *out3 = dst3.OutLine<uchar>();
@@ -2557,19 +2356,10 @@ GAPI_FLUID_KERNEL(GFluidSplit4, cv::gapi::core::GSplit4, false)
 
         GAPI_Assert(4 == src.meta().chan);
         int width = src.length();
+        int w = 0;
 
-        int w = 0; // cycle counter
-
-    #if CV_SIMD128
-        for (; w <= width-16; w+=16)
-        {
-            v_uint8x16 a, b, c, d;
-            v_load_deinterleave(&in[4*w], a, b, c, d);
-            v_store(&out1[w], a);
-            v_store(&out2[w], b);
-            v_store(&out3[w], c);
-            v_store(&out4[w], d);
-        }
+    #if CV_SIMD
+        w = split4_simd(in, out1, out2, out3, out4, width);
     #endif
 
         for (; w < width; w++)
@@ -2595,18 +2385,10 @@ GAPI_FLUID_KERNEL(GFluidMerge3, cv::gapi::core::GMerge3, false)
 
         GAPI_Assert(3 == dst.meta().chan);
         int width = dst.length();
+        int w = 0;
 
-        int w = 0; // cycle counter
-
-    #if CV_SIMD128
-        for (; w <= width-16; w+=16)
-        {
-            v_uint8x16 a, b, c;
-            a = v_load(&in1[w]);
-            b = v_load(&in2[w]);
-            c = v_load(&in3[w]);
-            v_store_interleave(&out[3*w], a, b, c);
-        }
+    #if CV_SIMD
+        w = merge3_simd(in1, in2, in3, out, width);
     #endif
 
         for (; w < width; w++)
@@ -2636,16 +2418,8 @@ GAPI_FLUID_KERNEL(GFluidMerge4, cv::gapi::core::GMerge4, false)
 
         int w = 0; // cycle counter
 
-    #if CV_SIMD128
-        for (; w <= width-16; w+=16)
-        {
-            v_uint8x16 a, b, c, d;
-            a = v_load(&in1[w]);
-            b = v_load(&in2[w]);
-            c = v_load(&in3[w]);
-            d = v_load(&in4[w]);
-            v_store_interleave(&out[4*w], a, b, c, d);
-        }
+    #if CV_SIMD
+        w = merge4_simd(in1, in2, in3, in4, out, width);
     #endif
 
         for (; w < width; w++)
@@ -2760,301 +2534,6 @@ GAPI_FLUID_KERNEL(GFluidPhase, cv::gapi::core::GPhase, false)
     }
 };
 
-template<typename T, typename Mapper, int chanNum>
-struct LinearScratchDesc {
-    using alpha_t = typename Mapper::alpha_type;
-    using index_t = typename Mapper::index_type;
-
-    alpha_t* alpha;
-    alpha_t* clone;
-    index_t* mapsx;
-    alpha_t* beta;
-    index_t* mapsy;
-    T*       tmp;
-
-    LinearScratchDesc(int /*inW*/, int /*inH*/, int outW, int outH,  void* data) {
-        alpha = reinterpret_cast<alpha_t*>(data);
-        clone = reinterpret_cast<alpha_t*>(alpha + outW);
-        mapsx = reinterpret_cast<index_t*>(clone + outW*4);
-        beta  = reinterpret_cast<alpha_t*>(mapsx + outW);
-        mapsy = reinterpret_cast<index_t*>(beta  + outH);
-        tmp   = reinterpret_cast<T*>      (mapsy + outH*2);
-    }
-
-    static int bufSize(int inW, int /*inH*/, int outW, int outH, int lpi) {
-        auto size = outW * sizeof(alpha_t)     +
-                    outW * sizeof(alpha_t) * 4 +  // alpha clones
-                    outW * sizeof(index_t)     +
-                    outH * sizeof(alpha_t)     +
-                    outH * sizeof(index_t) * 2 +
-                     inW * sizeof(T) * lpi * chanNum;
-
-        return static_cast<int>(size);
-    }
-};
-static inline double invRatio(int inSz, int outSz) {
-    return static_cast<double>(outSz) / inSz;
-}
-
-static inline double ratio(int inSz, int outSz) {
-    return 1 / invRatio(inSz, outSz);
-}
-
-template<typename T, typename Mapper, int chanNum = 1>
-static inline void initScratchLinear(const cv::GMatDesc& in,
-                                     const         Size& outSz,
-                                     cv::gapi::fluid::Buffer& scratch,
-                                     int  lpi) {
-    using alpha_type = typename Mapper::alpha_type;
-    static const auto unity = Mapper::unity;
-
-    auto inSz = in.size;
-    auto sbufsize = LinearScratchDesc<T, Mapper, chanNum>::bufSize(inSz.width, inSz.height, outSz.width, outSz.height, lpi);
-
-    Size scratch_size{sbufsize, 1};
-
-    cv::GMatDesc desc;
-    desc.chan = 1;
-    desc.depth = CV_8UC1;
-    desc.size = scratch_size;
-
-    cv::gapi::fluid::Buffer buffer(desc);
-    scratch = std::move(buffer);
-
-    double hRatio = ratio(in.size.width, outSz.width);
-    double vRatio = ratio(in.size.height, outSz.height);
-
-    LinearScratchDesc<T, Mapper, chanNum> scr(inSz.width, inSz.height, outSz.width, outSz.height, scratch.OutLineB());
-
-    auto *alpha = scr.alpha;
-    auto *clone = scr.clone;
-    auto *index = scr.mapsx;
-
-    for (int x = 0; x < outSz.width; x++) {
-        auto map = Mapper::map(hRatio, 0, in.size.width, x);
-        auto alpha0 = map.alpha0;
-        auto index0 = map.index0;
-
-        // TRICK:
-        // Algorithm takes pair of input pixels, sx0'th and sx1'th,
-        // and compute result as alpha0*src[sx0] + alpha1*src[sx1].
-        // By definition: sx1 == sx0 + 1 either sx1 == sx0, and
-        // alpha0 + alpha1 == unity (scaled appropriately).
-        // Here we modify formulas for alpha0 and sx1: by assuming
-        // that sx1 == sx0 + 1 always, and patching alpha0 so that
-        // result remains intact.
-        // Note that we need in.size.width >= 2, for both sx0 and
-        // sx0+1 were indexing pixels inside the input's width.
-        if (map.index1 != map.index0 + 1) {
-            GAPI_DbgAssert(map.index1 == map.index0);
-            GAPI_DbgAssert(in.size.width >= 2);
-            if (map.index0 < in.size.width-1) {
-                // sx1=sx0+1 fits inside row,
-                // make sure alpha0=unity and alpha1=0,
-                // so that result equals src[sx0]*unity
-                alpha0 = saturate_cast<alpha_type>(unity);
-            } else {
-                // shift sx0 to left by 1 pixel,
-                // and make sure that alpha0=0 and alpha1==1,
-                // so that result equals to src[sx0+1]*unity
-                alpha0 = 0;
-                index0--;
-            }
-        }
-
-        alpha[x] = alpha0;
-        index[x] = index0;
-
-        for (int l = 0; l < 4; l++) {
-            clone[4*x + l] = alpha0;
-        }
-    }
-
-    auto *beta    = scr.beta;
-    auto *index_y = scr.mapsy;
-
-    for (int y = 0; y < outSz.height; y++) {
-        auto mapY = Mapper::map(vRatio, 0, in.size.height, y);
-        beta[y] = mapY.alpha0;
-        index_y[y] = mapY.index0;
-        index_y[outSz.height + y] = mapY.index1;
-    }
-}
-
-template<typename F, typename I>
-struct MapperUnit {
-    F alpha0, alpha1;
-    I index0, index1;
-};
-
-inline static uint8_t calc(short alpha0, uint8_t src0, short alpha1, uint8_t src1) {
-    constexpr static const int half = 1 << 14;
-    return (src0 * alpha0 + src1 * alpha1 + half) >> 15;
-}
-struct Mapper {
-    constexpr static const int ONE = 1 << 15;
-    typedef short alpha_type;
-    typedef short index_type;
-    constexpr static const int unity = ONE;
-
-    typedef MapperUnit<short, short> Unit;
-
-    static inline Unit map(double ratio, int start, int max, int outCoord) {
-        float f = static_cast<float>((outCoord + 0.5) * ratio - 0.5);
-        int s = cvFloor(f);
-        f -= s;
-
-        Unit u;
-
-        u.index0 = static_cast<short>(std::max(s - start, 0));
-        u.index1 = static_cast<short>(((f == 0.0) || s + 1 >= max) ? s - start : s - start + 1);
-
-        u.alpha0 = saturate_cast<short>(ONE * (1.0f - f));
-        u.alpha1 = saturate_cast<short>(ONE * f);
-
-        return u;
-    }
-};
-
-template<typename T, class Mapper, int numChan>
-static void calcRowLinearC(const cv::gapi::fluid::View  & in,
-                           cv::gapi::fluid::Buffer& out,
-                           cv::gapi::fluid::Buffer& scratch) {
-    using alpha_type = typename Mapper::alpha_type;
-
-    auto  inSz =  in.meta().size;
-    auto outSz = out.meta().size;
-
-    auto inY  = in.y();
-    int outY = out.y();
-    int lpi = out.lpi();
-
-    GAPI_DbgAssert(outY + lpi <= outSz.height);
-    GAPI_DbgAssert(lpi <= 4);
-
-    LinearScratchDesc<T, Mapper, numChan> scr(inSz.width, inSz.height, outSz.width, outSz.height, scratch.OutLineB());
-
-    const auto *alpha = scr.alpha;
-    const auto *mapsx = scr.mapsx;
-    const auto *beta_0 = scr.beta;
-    const auto *mapsy = scr.mapsy;
-
-    const auto *beta = beta_0 + outY;
-    const T *src0[4];
-    const T *src1[4];
-    T* dst[4];
-
-    for (int l = 0; l < lpi; l++) {
-        auto index0 = mapsy[outY + l] - inY;
-        auto index1 = mapsy[outSz.height + outY + l] - inY;
-        src0[l] = in.InLine<const T>(index0);
-        src1[l] = in.InLine<const T>(index1);
-        dst[l] = out.OutLine<T>(l);
-    }
-
-#if 0 // Disabling SSE4.1 path due to Valgrind issues: https://github.com/opencv/opencv/issues/21097
-#if CV_SSE4_1
-    const auto* clone = scr.clone;
-    auto* tmp = scr.tmp;
-
-    if (inSz.width >= 16 && outSz.width >= 16)
-    {
-        sse42::calcRowLinear_8UC_Impl_<numChan>(reinterpret_cast<uint8_t**>(dst),
-                                                reinterpret_cast<const uint8_t**>(src0),
-                                                reinterpret_cast<const uint8_t**>(src1),
-                                                reinterpret_cast<const short*>(alpha),
-                                                reinterpret_cast<const short*>(clone),
-                                                reinterpret_cast<const short*>(mapsx),
-                                                reinterpret_cast<const short*>(beta),
-                                                reinterpret_cast<uint8_t*>(tmp),
-                                                inSz, outSz, lpi);
-
-        return;
-    }
-#endif // CV_SSE4_1
-#endif
-    int length = out.length();
-    for (int l = 0; l < lpi; l++) {
-        constexpr static const auto unity = Mapper::unity;
-
-        auto beta0 =                                   beta[l];
-        auto beta1 = saturate_cast<alpha_type>(unity - beta[l]);
-
-        for (int x = 0; x < length; x++) {
-            auto alpha0 =                                   alpha[x];
-            auto alpha1 = saturate_cast<alpha_type>(unity - alpha[x]);
-            auto sx0 = mapsx[x];
-            auto sx1 = sx0 + 1;
-
-            for (int c = 0; c < numChan; c++) {
-                auto idx0 = numChan*sx0 + c;
-                auto idx1 = numChan*sx1 + c;
-                T tmp0 = calc(beta0, src0[l][idx0], beta1, src1[l][idx0]);
-                T tmp1 = calc(beta0, src0[l][idx1], beta1, src1[l][idx1]);
-                dst[l][numChan * x + c] = calc(alpha0, tmp0, alpha1, tmp1);
-            }
-        }
-    }
-}
-
-GAPI_FLUID_KERNEL(GFluidResize, cv::gapi::core::GResize, true)
-{
-    static const int Window = 1;
-    static const int LPI = 4;
-    static const auto Kind = GFluidKernel::Kind::Resize;
-
-    constexpr static const int INTER_RESIZE_COEF_BITS = 11;
-    constexpr static const int INTER_RESIZE_COEF_SCALE = 1 << INTER_RESIZE_COEF_BITS;
-    constexpr static const short ONE = INTER_RESIZE_COEF_SCALE;
-
-   static void initScratch(const cv::GMatDesc& in,
-                           cv::Size outSz, double fx, double fy, int /*interp*/,
-                           cv::gapi::fluid::Buffer &scratch)
-    {
-       int outSz_w;
-       int outSz_h;
-       if (outSz.width == 0 || outSz.height == 0)
-       {
-           outSz_w = static_cast<int>(round(in.size.width * fx));
-           outSz_h = static_cast<int>(round(in.size.height * fy));
-       }
-       else
-       {
-           outSz_w = outSz.width;
-           outSz_h = outSz.height;
-       }
-       cv::Size outSize(outSz_w, outSz_h);
-
-       if (in.chan == 3)
-       {
-           initScratchLinear<uchar, Mapper, 3>(in, outSize, scratch, LPI);
-       }
-       else if (in.chan == 4)
-       {
-           initScratchLinear<uchar, Mapper, 4>(in, outSize, scratch, LPI);
-       }
-    }
-
-    static void resetScratch(cv::gapi::fluid::Buffer& /*scratch*/)
-    {}
-
-    static void run(const cv::gapi::fluid::View& in, cv::Size /*sz*/, double /*fx*/, double /*fy*/, int interp,
-                    cv::gapi::fluid::Buffer& out,
-                    cv::gapi::fluid::Buffer& scratch) {
-        const int channels = in.meta().chan;
-        GAPI_Assert((channels == 3 || channels == 4) && (interp == cv::INTER_LINEAR));
-
-        if (channels == 3)
-        {
-            calcRowLinearC<uint8_t, Mapper, 3>(in, out, scratch);
-        }
-        else if (channels == 4)
-        {
-            calcRowLinearC<uint8_t, Mapper, 4>(in, out, scratch);
-        }
-    }
-};
-
 GAPI_FLUID_KERNEL(GFluidSqrt, cv::gapi::core::GSqrt, false)
 {
     static const int Window = 1;
@@ -3081,7 +2560,7 @@ GAPI_FLUID_KERNEL(GFluidSqrt, cv::gapi::core::GSqrt, false)
 } // namespace gapi
 } // namespace cv
 
-cv::gapi::GKernelPackage cv::gapi::core::fluid::kernels()
+cv::GKernelPackage cv::gapi::core::fluid::kernels()
 {
     using namespace cv::gapi::fluid;
 
@@ -3134,7 +2613,6 @@ cv::gapi::GKernelPackage cv::gapi::core::fluid::kernels()
             ,GFluidCmpNEScalar
             ,GFluidThreshold
             ,GFluidInRange
-            ,GFluidResize
             ,GFluidSqrt
         #if 0
             ,GFluidMean        -- not fluid
