@@ -55,6 +55,10 @@
 
 #include <initializer_list>
 
+#if __has_include(<Eigen/Dense>)
+#include <Eigen/Dense>
+#endif
+
 namespace cv
 {
 
@@ -214,6 +218,20 @@ public:
     Matx(const Matx<_Tp, m, n>& a, const Matx<_Tp, m, n>& b, Matx_DivOp);
     template<int l> Matx(const Matx<_Tp, m, l>& a, const Matx<_Tp, l, n>& b, Matx_MatMulOp);
     Matx(const Matx<_Tp, n, m>& a, Matx_TOp);
+
+    #if __has_include(<Eigen/Dense>)
+    template <typename T>
+    Matx(const Eigen::Matrix<T, m, n>& M) {
+      Eigen::Map<Eigen::Matrix<_Tp, m, n, Eigen::RowMajor>> v(val);
+      v = M.template cast<_Tp>();
+    }
+
+    template <typename T, int M = m, int N = n, typename = typename std::enable_if_t<N!=1>>
+    operator Eigen::Matrix<T, M, N>() const {
+      Eigen::Matrix<_Tp, m, n, Eigen::RowMajor> vec(val);
+      return vec.template cast<T>();
+    }
+    #endif
 
     _Tp val[m*n]; //< matrix elements
 };
@@ -409,6 +427,16 @@ public:
     Vec(const Matx<_Tp, cn, 1>& a, const Matx<_Tp, cn, 1>& b, Matx_AddOp);
     Vec(const Matx<_Tp, cn, 1>& a, const Matx<_Tp, cn, 1>& b, Matx_SubOp);
     template<typename _T2> Vec(const Matx<_Tp, cn, 1>& a, _T2 alpha, Matx_ScaleOp);
+
+#if __has_include(<Eigen/Dense>)
+    template <typename T>
+    operator Eigen::Vector<T, cn>() const { return Eigen::Vector<_Tp, cn>(this->val); }
+    template <typename T>
+    Vec(const Eigen::Vector<T, cn>& vec) {
+      Eigen::Map<Eigen::Vector<_Tp, cn>> v(this->val);
+      v = vec;
+    }
+#endif
 };
 
 /** @name Shorter aliases for the most popular specializations of Vec<T,n>

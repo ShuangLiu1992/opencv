@@ -55,6 +55,10 @@
 
 #include <type_traits>
 
+#if __has_include(<Eigen/Dense>)
+#include <Eigen/Dense>
+#endif
+
 namespace cv
 {
 
@@ -2361,6 +2365,11 @@ public:
 
     //! conversion to array.
     template<std::size_t _Nm> operator std::array<_Tp, _Nm>() const;
+
+#if __has_include(<Eigen/Dense>)
+    template <typename T, int R, int C>
+    operator Eigen::Matrix<T, R, C>() const { return Eigen::Matrix<_Tp, R, C, Eigen::RowMajor>(reinterpret_cast<_Tp*>(data)); }
+#endif
 
     //! conversion to Vec
     template<int n> operator Vec<typename DataType<_Tp>::channel_type, n>() const;
