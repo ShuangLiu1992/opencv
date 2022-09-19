@@ -278,7 +278,7 @@ __kernel void CeluForward(const int n, __global T* in, __global T* out,
 {
     int index = get_global_id(0);
     if(index < n)
-        out[index] = max(0.f, in[index]) + min(0.f, alpha * expm1(in[index] / alpha));
+        out[index] = max((T)0.f, in[index]) + (T)min(0.f, alpha * expm1(in[index] / alpha));
 }
 
 __kernel void HardSigmoidForward(const int n, __global T* in, __global T* out,
@@ -287,7 +287,7 @@ __kernel void HardSigmoidForward(const int n, __global T* in, __global T* out,
 {
     int index = get_global_id(0);
     if(index < n)
-        out[index] = max(0.f, min(1.f, alpha * in[index] + beta));
+        out[index] = max((T)0.f, (T)min(1.f, alpha * in[index] + beta));
 }
 
 __kernel void SeluForward(const int n, __global T* in, __global T* out,
@@ -305,4 +305,27 @@ __kernel void ThresholdedReluForward(const int n, __global T* in, __global T* ou
     int index = get_global_id(0);
     if(index < n)
         out[index] = (in[index] > alpha ? in[index] : 0.f);
+}
+
+__kernel void ShrinkForward(const int n, __global T* in, __global T* out,
+                            const KERNEL_ARG_DTYPE bias,
+                            const KERNEL_ARG_DTYPE lambd)
+{
+    int index = get_global_id(0);
+    if(index < n)
+        out[index] = in[index] < -lambd ? in[index] + bias : (in[index] > lambd ? in[index] - bias : 0.f);
+}
+
+__kernel void SignForward(const int n, __global T* in, __global T* out)
+{
+    int index = get_global_id(0);
+    if(index < n)
+        out[index] = in[index] > 0.f ? 1.0f : ((in[index] < 0.f) ? -1.0f : 0.0f);
+}
+
+__kernel void ReciprocalForward(const int n, __global T* in, __global T* out)
+{
+    int index = get_global_id(0);
+    if(index < n)
+        out[index] = 1.0f/in[index];
 }

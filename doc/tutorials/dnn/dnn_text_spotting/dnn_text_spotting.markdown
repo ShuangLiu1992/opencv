@@ -29,8 +29,8 @@ Before recognition, you should `setVocabulary` and `setDecodeType`.
 - "CTC-prefix-beam-search", the output of the text recognition model should be a probability matrix same with "CTC-greedy".
     - The algorithm is proposed at Hannun's [paper](https://arxiv.org/abs/1408.2873).
     - `setDecodeOptsCTCPrefixBeamSearch` could be used to control the beam size in search step.
-    - To futher optimize for big vocabulary, a new option `vocPruneSize` is introduced to avoid iterate the whole vocbulary
-       but only the number of `vocPruneSize` tokens with top probabilty.
+    - To further optimize for big vocabulary, a new option `vocPruneSize` is introduced to avoid iterate the whole vocbulary
+       but only the number of `vocPruneSize` tokens with top probability.
 
 @ref cv::dnn::TextRecognitionModel::recognize() is the main function for text recognition.
 - The input image should be a cropped text image or an image with `roiRects`
@@ -287,15 +287,15 @@ Output Examples:
 ![Picture example](detect_test2.jpg)
 
 ## Source Code
-The [source code](https://github.com/opencv/opencv/blob/master/modules/dnn/src/model.cpp)
+The [source code](https://github.com/opencv/opencv/blob/4.x/modules/dnn/src/model.cpp)
 of these APIs can be found in the DNN module.
 
 ## Detailed Sample
 For more information, please refer to:
-- [samples/dnn/scene_text_recognition.cpp](https://github.com/opencv/opencv/blob/master/samples/dnn/scene_text_recognition.cpp)
-- [samples/dnn/scene_text_detection.cpp](https://github.com/opencv/opencv/blob/master/samples/dnn/scene_text_detection.cpp)
-- [samples/dnn/text_detection.cpp](https://github.com/opencv/opencv/blob/master/samples/dnn/text_detection.cpp)
-- [samples/dnn/scene_text_spotting.cpp](https://github.com/opencv/opencv/blob/master/samples/dnn/scene_text_spotting.cpp)
+- [samples/dnn/scene_text_recognition.cpp](https://github.com/opencv/opencv/blob/4.x/samples/dnn/scene_text_recognition.cpp)
+- [samples/dnn/scene_text_detection.cpp](https://github.com/opencv/opencv/blob/4.x/samples/dnn/scene_text_detection.cpp)
+- [samples/dnn/text_detection.cpp](https://github.com/opencv/opencv/blob/4.x/samples/dnn/text_detection.cpp)
+- [samples/dnn/scene_text_spotting.cpp](https://github.com/opencv/opencv/blob/4.x/samples/dnn/scene_text_spotting.cpp)
 
 #### Test with an image
 Examples:

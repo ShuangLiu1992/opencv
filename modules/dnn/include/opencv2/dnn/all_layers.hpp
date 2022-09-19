@@ -256,13 +256,20 @@ CV__DNN_INLINE_NS_BEGIN
     {
     public:
         static Ptr<BaseConvolutionLayer> create(const LayerParams& params);
+        bool fusedActivation = false;
+        bool fusedAdd = false;
+        bool isConv2D = false; // Should be deleted after fastconv branch support Conv1D and Conv3D.
     };
 
     class CV_EXPORTS ConvolutionLayerInt8 : public BaseConvolutionLayer
     {
     public:
         int input_zp, output_zp;
-        float output_sc;
+        float input_sc, output_sc;
+
+        // quantization type flag. The perChannel default is true, that means it contains the parameters
+        // of per-Channel quantization. Otherwise, that means this layer contains per-Tensor quantized parameters.
+        bool per_channel;
         static Ptr<BaseConvolutionLayer> create(const LayerParams& params);
     };
 
@@ -294,6 +301,14 @@ CV__DNN_INLINE_NS_BEGIN
         static Ptr<ArgLayer> create(const LayerParams& params);
     };
 
+    /** @brief Gather layer
+     */
+    class CV_EXPORTS GatherLayer : public Layer
+    {
+    public:
+        static Ptr<GatherLayer> create(const LayerParams& params);
+    };
+
     class CV_EXPORTS PoolingLayer : public Layer
     {
     public:
@@ -322,7 +337,23 @@ CV__DNN_INLINE_NS_BEGIN
     {
     public:
         int input_zp, output_zp;
+        float input_sc, output_sc;
         static Ptr<PoolingLayerInt8> create(const LayerParams& params);
+    };
+
+    class CV_EXPORTS ReduceLayer : public Layer
+    {
+    public:
+        int reduceType;
+        // reduceDims contains the dimensions that need to be reduced, targetDims is the target output dimension.
+        std::vector<size_t> reduceDims, targetDims;
+        static Ptr<ReduceLayer> create(const LayerParams& params);
+    };
+
+    class CV_EXPORTS ReduceLayerInt8 : public ReduceLayer
+    {
+    public:
+        static Ptr<ReduceLayerInt8> create(const LayerParams& params);
     };
 
     class CV_EXPORTS SoftmaxLayer : public Layer
@@ -351,7 +382,12 @@ CV__DNN_INLINE_NS_BEGIN
     class CV_EXPORTS InnerProductLayerInt8 : public InnerProductLayer
     {
     public:
-        int output_zp;
+        int input_zp, output_zp;
+        float input_sc, output_sc;
+
+        // quantization type flag. The perChannel default is true, that means it contains the parameters
+        // of per-Channel quantization. Otherwise, that means this layer contains per-Tensor quantized parameters.
+        bool per_channel;
         static Ptr<InnerProductLayerInt8> create(const LayerParams& params);
     };
 
@@ -778,6 +814,26 @@ CV__DNN_INLINE_NS_BEGIN
         static Ptr<ActivationLayerInt8> create(const LayerParams &params);
     };
 
+    class CV_EXPORTS SignLayer : public ActivationLayer
+    {
+    public:
+        static Ptr<SignLayer> create(const LayerParams &params);
+    };
+
+    class CV_EXPORTS ShrinkLayer : public ActivationLayer
+    {
+    public:
+        float bias;
+        float lambd;
+        static Ptr<ShrinkLayer> create(const LayerParams &params);
+    };
+
+    class CV_EXPORTS ReciprocalLayer : public ActivationLayer
+    {
+    public:
+        static Ptr<ReciprocalLayer> create(const LayerParams &params);
+    };
+
     /* Layers used in semantic segmentation */
 
     class CV_EXPORTS CropLayer : public Layer
@@ -803,6 +859,12 @@ CV__DNN_INLINE_NS_BEGIN
     {
     public:
         static Ptr<EltwiseLayerInt8> create(const LayerParams &params);
+    };
+
+    class CV_EXPORTS NaryEltwiseLayer : public Layer
+    {
+    public:
+        static Ptr<NaryEltwiseLayer> create(const LayerParams &params);
     };
 
     class CV_EXPORTS BatchNormLayer : public ActivationLayer
