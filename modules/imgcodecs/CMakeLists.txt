@@ -25,9 +25,7 @@ if(HAVE_WEBP)
 endif()
 
 if(HAVE_PNG)
-  add_definitions(${PNG_DEFINITIONS})
-  ocv_include_directories(${PNG_INCLUDE_DIR})
-  list(APPEND GRFMT_LIBS ${PNG_LIBRARIES})
+  list(APPEND GRFMT_LIBS PNG::PNG)
 endif()
 
 if(HAVE_GDCM)
@@ -68,8 +66,7 @@ if(HAVE_OPENEXR)
 endif()
 
 if(HAVE_PNG OR HAVE_TIFF OR HAVE_OPENEXR)
-  ocv_include_directories(${ZLIB_INCLUDE_DIRS})
-  list(APPEND GRFMT_LIBS ${ZLIB_LIBRARIES})
+  list(APPEND GRFMT_LIBS ZLIB::ZLIB)
 endif()
 
 if(HAVE_GDAL)
