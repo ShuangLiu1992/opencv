@@ -25,7 +25,7 @@ if(HAVE_WEBP)
 endif()
 
 if(HAVE_PNG)
-  list(APPEND GRFMT_LIBS PNG::PNG)
+  list(APPEND GRFMT_LIBS CONAN_PKG::libpng)
 endif()
 
 if(HAVE_GDCM)
@@ -66,7 +66,7 @@ if(HAVE_OPENEXR)
 endif()
 
 if(HAVE_PNG OR HAVE_TIFF OR HAVE_OPENEXR)
-  list(APPEND GRFMT_LIBS ZLIB::ZLIB)
+  list(APPEND GRFMT_LIBS CONAN_PKG::zlib)
 endif()
 
 if(HAVE_GDAL)
