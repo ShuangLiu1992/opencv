@@ -24,10 +24,6 @@ if(HAVE_WEBP)
   list(APPEND GRFMT_LIBS ${WEBP_LIBRARIES})
 endif()
 
-if(HAVE_PNG)
-  list(APPEND GRFMT_LIBS CONAN_PKG::libpng)
-endif()
-
 if(HAVE_GDCM)
   ocv_include_directories(${GDCM_INCLUDE_DIRS})
   list(APPEND GRFMT_LIBS ${GDCM_LIBRARIES})
@@ -63,6 +59,10 @@ if(HAVE_OPENEXR)
   else()
     message(STATUS "imgcodecs: OpenEXR codec is disabled in runtime. Details: https://github.com/opencv/opencv/issues/21326")
   endif()
+endif()
+
+if(HAVE_PNG)
+  list(APPEND GRFMT_LIBS CONAN_PKG::libpng)
 endif()
 
 if(HAVE_PNG OR HAVE_TIFF OR HAVE_OPENEXR)
