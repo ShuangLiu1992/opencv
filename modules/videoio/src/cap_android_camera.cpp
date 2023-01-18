@@ -203,6 +203,7 @@ class AndroidCameraCapture : public IVideoCapture
     RangeValue<int64_t> exposureRange;
     int32_t sensitivity = 0;
     RangeValue<int32_t> sensitivityRange;
+    int64_t timestampNs;
 
 public:
     // for synchronization with NDK capture callback
@@ -342,6 +343,7 @@ public:
             LOGE("Unsupported format");
             return false;
         }
+        AImage_getTimestamp(img, &timestampNs);
 
         buffer.clear();
         buffer.insert(buffer.end(), yPixel, yPixel + yBufferLen);
@@ -415,6 +417,8 @@ public:
                 return sensitivity;
             case CV_CAP_PROP_FOURCC:
                 return fourCC;
+            case CAP_PROP_POS_MSEC:
+                return timestampNs;
             default:
                 break;
         }
