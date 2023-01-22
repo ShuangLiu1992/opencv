@@ -62,11 +62,13 @@ if(HAVE_OPENEXR)
 endif()
 
 if(HAVE_PNG)
-  list(APPEND GRFMT_LIBS CONAN_PKG::libpng)
+  find_package(libpng REQUIRED)
+  list(APPEND GRFMT_LIBS libpng::libpng)
 endif()
 
 if(HAVE_PNG OR HAVE_TIFF OR HAVE_OPENEXR)
-  list(APPEND GRFMT_LIBS CONAN_PKG::zlib)
+  find_package(ZLIB REQUIRED)
+  list(APPEND GRFMT_LIBS ZLIB::ZLIB)
 endif()
 
 if(HAVE_GDAL)
