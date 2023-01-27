@@ -195,15 +195,8 @@ if(WITH_JASPER AND NOT HAVE_OPENJPEG)
 endif()
 
 if(WITH_SPNG)
-  set(SPNG_LIBRARY libspng CACHE INTERNAL "")
-  set(SPNG_LIBRARIES ${SPNG_LIBRARY})
-  add_subdirectory("${OpenCV_SOURCE_DIR}/3rdparty/libspng")
-  set(SPNG_INCLUDE_DIR "${${SPNG_LIBRARY}_SOURCE_DIR}" CACHE INTERNAL "")
-  set(SPNG_DEFINITIONS "")
-  ocv_parse_header("${SPNG_INCLUDE_DIR}/spng.h" SPNG_VERSION_LINES SPNG_VERSION_MAJOR SPNG_VERSION_MINOR SPNG_VERSION_PATCH)
-
+  find_package(libspng REQUIRED)
   set(HAVE_SPNG YES)
-  set(SPNG_VERSION "${SPNG_VERSION_MAJOR}.${SPNG_VERSION_MINOR}.${SPNG_VERSION_PATCH}")
   message(STATUS "imgcodecs: PNG codec will use SPNG, version: ${SPNG_VERSION} ")
 endif()
 

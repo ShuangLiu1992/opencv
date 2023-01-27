@@ -25,9 +25,7 @@ if(HAVE_WEBP)
 endif()
 
 if(HAVE_SPNG)
-  add_definitions(${SPNG_DEFINITIONS})
-  ocv_include_directories(${SPNG_INCLUDE_DIR})
-  list(APPEND GRFMT_LIBS ${SPNG_LIBRARY})
+  list(APPEND GRFMT_LIBS libspng::libspng)
 endif()
 
 if(HAVE_PNG)
