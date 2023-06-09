@@ -37,7 +37,7 @@ class OPENCVConan(ConanFile):
 
     def generate(self):
         tc = CMakeToolchain(self)
-        tc.variables['BUILD_LIST'] = "core,features2d,imgcodecs,imgproc,highgui,video,videoio,calib3d,aruco"
+        tc.variables['BUILD_LIST'] = "core,features2d,imgcodecs,imgproc,highgui,video,videoio,calib3d,aruco,xfeatures2d"
 
         tc.variables['CMAKE_INSTALL_RPATH_USE_LINK_PATH'] = False
         tc.variables['OPENCV_EXTRA_MODULES_PATH'] = unix_path(self, os.path.join(self.source_folder,
