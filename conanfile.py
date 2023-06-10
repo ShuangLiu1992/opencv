@@ -76,12 +76,6 @@ class OPENCVConan(ConanFile):
             tc.variables['CV_ENABLE_INTRINSICS'] = self.settings.os.simd
             tc.variables['BUILD_WASM_INTRIN_TESTS'] = "OFF"
 
-            # emsdk 3.1.31 puts version definition in <emscripten/version.h>, which isn't included by default
-            version_parts = str(self.settings.os.sdk_version).split(".")
-            tc.preprocessor_definitions["__EMSCRIPTEN_major__"] = version_parts[0]
-            tc.preprocessor_definitions["__EMSCRIPTEN_minor__"] = version_parts[1]
-            tc.preprocessor_definitions["__EMSCRIPTEN_tiny__"] = version_parts[2]
-
         if self.settings.os == "Android":
             tc.variables['BUILD_ANDROID_EXAMPLES'] = "OFF"
 
