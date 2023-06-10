@@ -14,13 +14,7 @@ class OPENCVConan(ConanFile):
     default_options = {"shared": False, "fPIC": True}
 
     generators = "CMakeDeps"
-
-    def validate(self):
-        if self.settings.os == "Android":
-            if int(str(self.settings.os.api_level)) < 24:
-                # https://github.com/opencv/opencv/blob/4.5.5/modules/videoio/cmake/detect_android_camera.cmake
-                raise ConanInvalidConfiguration("opencv videoio on Android requires abi level >= 24")
-
+    
     def requirements(self):
         self.requires(f"eigen/{self.version}")
         self.requires(f"zlib/{self.version}")
