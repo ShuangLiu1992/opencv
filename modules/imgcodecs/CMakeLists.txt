@@ -19,8 +19,7 @@ if (HAVE_AVIF)
 endif()
 
 if(HAVE_JPEG)
-  ocv_include_directories(${JPEG_INCLUDE_DIR} ${${JPEG_LIBRARY}_BINARY_DIR})
-  list(APPEND GRFMT_LIBS ${JPEG_LIBRARIES})
+  list(APPEND GRFMT_LIBS libjpeg-turbo::jpeg-static)
 endif()
 
 if(HAVE_WEBP)

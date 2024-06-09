@@ -53,6 +53,13 @@ SET(OpenCV_VERSION_TWEAK  0)
 SET(OpenCV_VERSION_STATUS "@OPENCV_VERSION_STATUS@")
 
 include(FindPackageHandleStandardArgs)
+include(CMakeFindDependencyMacro)
+find_dependency(ZLIB REQUIRED)
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows" OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
+find_dependency(ffmpeg REQUIRED)
+endif()
+find_dependency(libspng REQUIRED)
+find_dependency(libjpeg-turbo REQUIRED)
 
 if(NOT CMAKE_VERSION VERSION_LESS 2.8.8
     AND OpenCV_FIND_COMPONENTS  # prevent excessive output
