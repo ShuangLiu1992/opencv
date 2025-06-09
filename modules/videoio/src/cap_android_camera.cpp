@@ -417,7 +417,7 @@ public:
             case CV_CAP_PROP_FOURCC:
                 return fourCC;
             case CAP_PROP_POS_MSEC:
-                return timestampNs;
+                return timestampNs * 1e-6;
             default:
                 break;
         }
